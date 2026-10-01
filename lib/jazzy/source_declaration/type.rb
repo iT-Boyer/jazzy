@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
+require 'logger'
+require 'active_support'
 require 'active_support/inflector'
 
 module Jazzy
   class SourceDeclaration
-    # rubocop:disable Metrics/ClassLength
+    # rubocop:disable-next Metrics/ClassLength
     class Type
       def self.all
         TYPES.keys.map { |k| new(k) }.reject { |t| t.name.nil? }
@@ -147,8 +149,8 @@ module Jazzy
       def param?
         # SourceKit strangely categorizes initializer parameters as local
         # variables, so both kinds represent a parameter in jazzy.
-        kind == 'source.lang.swift.decl.var.parameter' ||
-          kind == 'source.lang.swift.decl.var.local'
+        ['source.lang.swift.decl.var.parameter',
+         'source.lang.swift.decl.var.local'].include?(kind)
       end
 
       def generic_type_param?
@@ -163,8 +165,14 @@ module Jazzy
         kind == 'sourcekitten.source.lang.objc.decl.unexposed'
       end
 
+      OVERVIEW_KIND = 'Overview'
+
       def self.overview
-        Type.new('Overview')
+        Type.new(OVERVIEW_KIND)
+      end
+
+      def overview?
+        kind == OVERVIEW_KIND
       end
 
       MARKDOWN_KIND = 'document.markdown'
@@ -193,7 +201,8 @@ module Jazzy
           dash: 'Guide',
         }.freeze,
 
-        'Overview' => {
+        # Group/Overview
+        OVERVIEW_KIND => {
           jazzy: nil,
           dash: 'Section',
         }.freeze,
@@ -456,8 +465,11 @@ module Jazzy
           jazzy: 'Associated Type',
           dash: 'Alias',
         }.freeze,
+        'source.lang.swift.decl.macro' => {
+          jazzy: 'Macro',
+          dash: 'Macro',
+        }.freeze,
       }.freeze
     end
-    # rubocop:enable Metrics/ClassLength
   end
 end

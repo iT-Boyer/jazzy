@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# rubocop:disable Metrics/ClassLength
+# rubocop:disable-next Metrics/ClassLength
 module Jazzy
   module SymbolGraph
     # A Symbol is a tidied-up SymbolGraph JSON object
@@ -20,6 +20,10 @@ module Jazzy
 
       def name
         path_components[-1] || '??'
+      end
+
+      def full_name
+        path_components.join('.')
       end
 
       def initialize(hash)
@@ -100,6 +104,8 @@ module Jazzy
         'typealias' => 'typealias',
         'associatedtype' => 'associatedtype',
         'actor' => 'actor',
+        'macro' => 'macro',
+        'extension' => 'extension',
       }.freeze
 
       # We treat 'static var' differently to 'class var'
@@ -110,7 +116,7 @@ module Jazzy
         end
         return kind unless keywords.member?('static')
 
-        kind.gsub(/type/, 'static')
+        kind.gsub('type', 'static')
       end
 
       def init_kind(kind, keywords)
@@ -119,6 +125,10 @@ module Jazzy
         raise "Unknown symbol kind '#{kind}'" unless sourcekit_kind
 
         self.kind = "source.lang.swift.decl.#{sourcekit_kind}"
+      end
+
+      def extension?
+        kind.end_with?('extension')
       end
 
       # Mapping SymbolGraph's ACL to SourceKit
@@ -216,6 +226,25 @@ module Jazzy
           availability_attributes(avail_hash_list) + spi_attributes
       end
 
+      # SourceKit common fields, shared by extension and regular symbols.
+      # Things we do not know for fabricated extensions.
+      def add_to_sourcekit(hash)
+        unless doc_comments.nil?
+          hash['key.doc.comment'] = doc_comments
+          hash['key.doc.full_as_xml'] = ''
+        end
+
+        hash['key.accessibility'] = acl
+
+        unless location.nil?
+          hash['key.filepath'] = location[:filename]
+          hash['key.doc.line'] = location[:line] + 1
+          hash['key.doc.column'] = location[:character] + 1
+        end
+
+        hash
+      end
+
       # Sort order
       include Comparable
 
@@ -245,4 +274,3 @@ module Jazzy
     end
   end
 end
-# rubocop:enable Metrics/ClassLength

@@ -53,6 +53,9 @@ one you'd prefer.  If this doesn't help, and you're using Xcode, then try passin
 extra arguments to `xcodebuild`, for example
 `jazzy --build-tool-arguments -scheme,MyScheme,-target,MyTarget`.
 
+If you want to generate docs for several modules at once then see [Documenting multiple
+modules](#documenting-multiple-modules).
+
 You can set options for your project’s documentation in a configuration file,
 `.jazzy.yaml` by default. For a detailed explanation and an exhaustive list of
 all available options, run `jazzy --help config`.
@@ -67,7 +70,7 @@ Here are some resources with tutorials and examples, starting with the most mode
 * Erica Sadun's [Swift header documentation in Xcode 7](https://ericasadun.com/2015/06/14/swift-header-documentation-in-xcode-7/) post and her [book on Swift Documentation Markup](https://itunes.apple.com/us/book/swift-documentation-markup/id1049010423).
 
 For Objective-C documentation the same keywords are supported, but note that the format
-is slightly different. In Swift you would write `- returns:`, but in Objective-C you write `@return`. See Apple's [*HeaderDoc User Guide*](https://developer.apple.com/legacy/library/documentation/DeveloperTools/Conceptual/HeaderDoc/tags/tags.html) for more details. **Note: `jazzy` currently does not support _all_ Objective-C keywords listed in this document, only @param, @return, @warning, @see, and @note.**
+is slightly different. In Swift you would write `- returns:`, but in Objective-C you write `@return`. See Apple's [*HeaderDoc User Guide*](https://developer.apple.com/legacy/library/documentation/DeveloperTools/Conceptual/HeaderDoc/tags/tags.html) for more details. **Note: `jazzy` currently does not support _all_ Objective-C keywords listed in this document, only @param, @return, @warning, @see, @note, @code, @endcode, and @c.**
 
 Jazzy can also generate cross-references within your documentation. A symbol name in
 backticks generates a link, for example:
@@ -84,6 +87,13 @@ Jazzy understands Apple's DocC-style links too, for example:
   that appears as just `method(param1:)` in the rendered page.
 * \`\`\<doc:method(_:)-e873\>\`\` - a link to a specific overload of `method(_:)`.
   Jazzy can't tell which overload you intend and links to the first one.
+
+If your documentation is for multiple modules then symbol name resolution works
+approximately as though all the modules have been imported: you can use \`TypeName\`
+to refer to a top-level type in any of the modules, or \`ModuleName.TypeName\` to
+be specific.  If there is an ambiguity then you can use a leading slash to
+indicate that the first part of the name should be read as a module name:
+\`/ModuleName.TypeName\`.
 
 ### Math
 
@@ -139,20 +149,36 @@ jazzy \
 
 ### Objective-C
 
-To generate documentation for Objective-C headers, you must pass the following
-parameters to jazzy:
-
+To generate documentation for a simple Objective-C project, you must pass the
+following parameters:
 * `--objc`
 * `--umbrella-header ...`
 * `--framework-root ...`
-* `--sdk [iphone|watch|appletv][os|simulator]|macosx` (optional, default value
+
+...and optionally:
+* `--sdk [iphone|watch|appletv][os|simulator]|macosx` (default value
    of `macosx`)
-* `--hide-declarations [objc|swift]` (optional, hides the selected language
-   declarations)
+* `--hide-declarations [objc|swift]` (hides the selected language declarations)
 
-##### Example
+For example, this is how the `AFNetworking` docs are generated:
 
-This is how Realm Objective-C docs are generated:
+```shell
+jazzy \
+  --objc \
+  --author AFNetworking \
+  --author_url http://afnetworking.com \
+  --source-host github \
+  --source-host-url https://github.com/AFNetworking/AFNetworking \
+  --source-host-files-url https://github.com/AFNetworking/AFNetworking/tree/2.6.2 \
+  --module-version 2.6.2 \
+  --umbrella-header AFNetworking/AFNetworking.h \
+  --framework-root . \
+  --module AFNetworking
+```
+
+For a more complicated Objective-C project, instead use `--build-tool-arguments`
+to pass arbitrary compiler flags.  For example, this is how Realm Objective-C
+docs are generated:
 
 ```shell
 jazzy \
@@ -171,25 +197,12 @@ jazzy \
   --head "$(cat docs/custom_head.html)"
 ```
 
-This is how the AFNetworking docs are generated:
-
-```shell
-jazzy \
-  --objc \
-  --author AFNetworking \
-  --author_url http://afnetworking.com \
-  --source-host github \
-  --source-host-url https://github.com/AFNetworking/AFNetworking \
-  --source-host-files-url https://github.com/AFNetworking/AFNetworking/tree/2.6.2 \
-  --module-version 2.6.2 \
-  --umbrella-header AFNetworking/AFNetworking.h \
-  --framework-root . \
-  --module AFNetworking
-```
+See [the Objective-C docs](ObjectiveC.md) for more information and some tips
+on troubleshooting.
 
 ### Mixed Objective-C / Swift
 
-*This feature is new and has some rough edges.*
+*This feature has some rough edges.*
 
 To generate documentation for a mixed Swift and Objective-C project you must first
 generate two [SourceKitten][sourcekitten] files: one for Swift and one for Objective-C.
@@ -211,16 +224,12 @@ sourcekitten doc --objc $(pwd)/MyProject/MyProject.h \
       -I $(pwd) -fmodules > objcDoc.json
 
 # Feed both outputs to Jazzy as a comma-separated list
-jazzy --sourcekitten-sourcefile swiftDoc.json,objcDoc.json
+jazzy --module MyProject --sourcekitten-sourcefile swiftDoc.json,objcDoc.json
 ```
 
 ### Docs from `.swiftmodule`s or frameworks
 
-*This feature is new and relies on a new Swift feature: there may be crashes
-and mistakes: reports welcome.*
-
-Swift 5.3 adds support for symbol graph generation from `.swiftmodule` files.
-This looks to be part of Apple's toolchain for generating their online docs.
+Swift 5.3 added support for symbol graph generation from `.swiftmodule` files.
 
 Jazzy can use this to generate API documentation.  This is faster than using
 the source code directly but does have limitations: for example documentation
@@ -260,16 +269,96 @@ Some examples:
    This implies that `/Build/Products/MyMod.framework` exists and contains
    a `.swiftmodule`.  Again the `--source-directory` is searched by default
    if `-F` is not passed in.
+5. With pre-generated symbolgraph files:
+    ```shell
+    jazzy --module MyMod --swift-build-tool symbolgraph
+          --symbolgraph-directory Build/symbolgraphs
+    ```
+    If you've separately generated symbolgraph files by the use of 
+    `-emit-symbol-graph`, you can pass the location of these files using
+    `--symbolgraph-directory` from where they can be parsed directly.
 
 See `swift symbolgraph-extract -help` for all the things you can pass via
 `--build-tool-arguments`: if your module has dependencies then you may need
 to add various search path options to let Swift load it.
 
+### Documenting multiple modules
+
+*This feature is new, bugs and feedback welcome*
+
+Sometimes it's useful to document multiple modules together in the same site,
+for example an app and its extensions, or an SDK that happens to be implemented
+as several modules.
+
+Jazzy can build docs for all these together and create a single site with
+search, cross-module linking, and navigation.
+
+#### Build configuration
+
+If all the modules share the same build flags then the easiest way to do this
+is with `--modules`, for example `jazzy --modules ModuleA,ModuleB,ModuleC`.
+
+If your modules have different build flags then you have to use the config file.
+For example:
+```yaml
+modules:
+  - module: ModuleA
+  - module: ModuleB
+    build_tool_arguments:
+      - -scheme
+      - SpecialScheme
+      - -target
+      - ModuleB
+    source_directory: ModuleBProject
+  - module: ModuleC
+    objc: true
+    umbrella_header: ModuleC/ModuleC.h
+    framework_root: ModuleC
+    sdk: appletvsimulator
+  - module: ModuleD
+    sourcekitten_sourcefile: [ModuleD1.json, ModuleD2.json]
+```
+This describes a four-module project of which one is 'normal', one requires
+special Xcode treatment, one is Objective-C, and one has prebuilt SourceKitten
+JSON.
+
+Per-module options set at the top level are inherited by each module unless
+also set locally -- but you can't set both `--module` and `--modules`.
+
+Jazzy doesn't support `--podspec` mode in conjunction with the multiple
+modules feature.
+
+#### Presentation
+
+The `--merge-modules` flag controls how declarations from multiple modules
+are arranged into categories.
+
+The default of `all` has Jazzy combine declarations from the modules so there
+is one category of classes, one of structures, and so on.  To the user this means
+they do not worry about which module exports a particular type, although that
+information remains available in the type's page.
+
+Setting `--merge-modules none` changes this so each module is a top-level
+category, with the module's symbols listed under it.  
+
+Setting `--merge-modules extensions` is like `none` except cross-module
+extensions are shown as part of their extended type.  For example if `ModuleA`
+extends `ModuleB.SomeType` then those extension members from `ModuleA` are shown
+on the `ModuleB.SomeType` page along with the rest of `SomeType`.
+
+You can use `--documentation` to include guides, `custom_categories` to customize
+the layout with types from whichever modules you want, and `--abstract` to add
+additional markdown content to the per-module category pages.
+
+Use the `--title`, `--readme-title`, and `--docset-title` flags to control the
+top-level names of your documentation.  Without these, Jazzy uses the name of one
+of the modules being documented.
+
 ### Themes
 
 Three themes are provided with jazzy: `apple` (default), `fullwidth` and `jony`.
 
-* `apple` example: <https://realm.io/docs/swift/latest/api/>
+* `apple` example: <https://johnfairh.github.io/demo-jazzy-apple-theme/>
 * `fullwidth` example: <https://reduxkit.github.io/ReduxKit/>
 * `jony` example: <https://harshilshah.github.io/IGListKit/>
 
@@ -293,6 +382,10 @@ Any files found matching the file pattern will be parsed and included as a docum
 There are a few limitations:
 - File names must be unique from source files.
 - Readme should be specified separately using the `readme` option.
+
+You can link to a guide from other guides or doc comments using the name of the page
+as it appears in the site.  For example, to link to the guide generated from a file
+called `My Guide.md` you would write \`My Guide\`.
 
 ### Section description abstracts
 
@@ -349,26 +442,100 @@ Note that the `--include` option is applied before the `--exclude` option. For e
 Declarations with a documentation comment containing `:nodoc:` are excluded from the
 documentation.
 
+Declarations with the `@_documentation(visibility:)` attribute are treated as though they
+are written with the given visibility.  You can use this as a replacement for `:nodoc:` as
+part of a transition to Apple's DocC but it is not compatible with Jazzy's symbolgraph mode.
+
 ### Documentation structure
 
-By default Jazzy does not create separate web pages for declarations that do
-not have any members: instead they are nested into some parent page.  Use the
-`--separate-global-declarations` flag to change this and always create pages
-for declarations that can be directly accessed from client code.
+Jazzy arranges documentation into categories.  The default categories are things
+like _Classes_ and _Structures_ corresponding to programming-language concepts,
+as well as _Guides_ if `--documentation` is set.
+
+You can customize the categories and their contents using `custom_categories` in
+the config file. `custom_categories` is an array of objects.  Each category must contain two properties:
+- `name`: A string with the name you want to give to this category
+- `children`: An array used to specify the root level declarations that you want to add to
+this category. 
+
+Each child, then, can be one of the following:
+- A string, containing either the exact name of one root level declaration you want to
+match, or the fully qualified name (`ModuleName.DeclarationName`)
+- An object, containing the property:
+  - `regex`: a string which will be used to match multiple root level declarations from
+all of the modules.
+
+See the ReSwift [docs](https://reswift.github.io/ReSwift/) and
+[config file](https://github.com/ReSwift/ReSwift/blob/e94737282850fa038b625b4e351d1608a3d02cee/.jazzy.json)
+for an example.
+
+Within each category the items are ordered first alphabetically by source
+filename, and then by declaration order within the file.  You can use
+`// MARK:` comments within the file to create subheadings on the page, for
+example to split up properties and methods.  There’s no way to customize this
+order short of editing either the generated web page or the SourceKitten JSON.
+
+Swift extensions and Objective-C categories allow type members to be declared
+across multiple source files.  In general, extensions follow the main type
+declaration: first extensions from the same source file, then extensions from
+other files ordered alphabetically by filename.  Swift conditional extensions
+(`extension A where …`) always appear beneath unconditional extensions.
+
+Use this pattern to add or customize the subheading before extension members:
+```swift
+extension MyType {
+  // MARK: Subheading for this group of methods
+  …
+}
+```
+
+When Jazzy is using `--swift-build-tool symgraph` the source file names and
+line numbers may not be available. In this case the ordering is approximately
+alphabetical by symbol name and USR; the order is stable for the same input.
+
+Jazzy does not normally create separate web pages for declarations that do not
+have any members -- instead they are entirely nested into their parent page.  Use
+the `--separate-global-declarations` flag to change this and create pages for
+these empty types.
 
 ### Choosing the Swift language version
 
 Jazzy normally uses the Swift compiler from the Xcode currently configured by
-`xcode-select`.  Use the `--swift-version` flag to compile with a different
-Xcode.
+`xcode-select`.  Use the `--swift-version` flag or the `DEVELOPER_DIR` environment
+variable to compile with a different Xcode.
 
 The value you pass to `--swift-version` must be the Swift language version given
-by `swift --version` in the Xcode you want to use.
+by `swift --version` in the Xcode you want to use. Jazzy uses
+[xcinvoke](https://github.com/segiddins/xcinvoke) to find a suitable Xcode
+installation on your system. This can be slow: if you know where Xcode is
+installed then it's faster to set `DEVELOPER_DIR` directly.
 
-For example to use Xcode 9.4:
+For example to use Xcode 14:
 ```shell
-jazzy --swift-version 4.1.2
+jazzy --swift-version 5.7
 ```
+...or:
+```shell
+DEVELOPER_DIR=/Applications/Xcode_14.app/Contents/Developer jazzy
+```
+
+### Dash Docset Support
+
+As well as the browsable HTML documentation, Jazzy creates a _docset_ for use
+with the [Dash][dash] app.
+
+By default the docset is created at `docs/docsets/ModuleName.tgz`.  Use
+`--docset-path` to create it somewhere else; use `--docset-title` to change
+the docset's title.
+
+Use `--docset-playground-url` and `--docset-icon` to further customize the
+docset.
+
+If you set both `--root-url` to be the (https://) URL where you plan to deploy
+your documentation and `--version` to give your documentation a version number
+then Jazzy also creates a docset feed XML file and includes an "Install in Dash"
+button on the site.  This lets users who are browsing your documentation on the
+web install and start using the docs in Dash locally.
 
 ## Linux
 
@@ -407,6 +574,47 @@ Check the `--min-acl` setting -- see [above](#controlling-what-is-documented).
    may also help.  If none of these work then you can set the `DEVELOPER_DIR`
    environment variable to point to the Xcode you want before running Jazzy
    without the `--swift-version` flag.
+
+### Objective-C
+
+See [this document](ObjectiveC.md).
+
+### Miscellaneous
+
+**Missing docset**
+
+Jazzy only builds a docset when you set the `--module` or `--modules` flag.
+
+**Unable to pass --build-tool-arguments containing commas**
+
+If you want Jazzy to run something like `xcodebuild -scheme Scheme -destination 'a=x,b=y,c=z'`
+then you must use the config file instead of the CLI flag because the CLI parser
+that Jazzy uses cannot handle arguments that themselves contain commas.
+
+The example config file here would be:
+```yaml
+build_tool_arguments:
+  - "-scheme"
+  - "Scheme"
+  - "-destination"
+  - "a=x,b=y,c=z"
+```
+
+**Errors running in an Xcode Run Script phase**
+
+Running Jazzy from an Xcode build phase can go wrong in cryptic ways when Jazzy
+has to run `xcodebuild`.
+
+Users [have reported](https://github.com/realm/jazzy/issues/1012) that error
+messages about symbols lacking USRs can be fixed by unsetting
+`LLVM_TARGET_TRIPLE_SUFFIX` as part of the run script.
+
+**Warnings about matches and leftovers when using globs and wildcards**
+
+Some flags such as `--include` and `--documentation` support '*' characters as
+wildcards.  If you are using the CLI then you must make sure that your shell
+does not itself try to interpret them, for example by quoting the token: use
+`jazzy --documentation '*.md'` instead of `jazzy --documentation *.md`.
 
 ### Installation Problems
 
@@ -482,3 +690,4 @@ read [our blog](https://realm.io/news) or say hi on twitter
 [bundler]: https://rubygems.org/gems/bundler
 [mustache]: https://mustache.github.io "Mustache"
 [spm]: https://swift.org/package-manager/ "Swift Package Manager"
+[dash]: https://kapeli.com/dash/ "Dash"

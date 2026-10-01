@@ -4,7 +4,7 @@ require 'tmpdir'
 require 'json'
 
 module Jazzy
-  # rubocop:disable Metrics/ClassLength
+  # rubocop:disable-next Metrics/ClassLength
   class PodspecDocumenter
     attr_reader :podspec
 
@@ -44,7 +44,7 @@ module Jazzy
       end
     end
 
-    # rubocop:disable Metrics/MethodLength
+    # rubocop:disable-next Metrics/MethodLength
     def self.apply_config_defaults(podspec, config)
       return unless podspec
 
@@ -52,7 +52,7 @@ module Jazzy
         config.author_name = author_name(podspec)
         config.author_name_configured = true
       end
-      unless config.module_name_configured
+      unless config.module_name_known?
         config.module_name = podspec.module_name
         config.module_name_configured = true
       end
@@ -74,7 +74,6 @@ module Jazzy
         config.swift_version_configured = true
       end
     end
-    # rubocop:enable Metrics/MethodLength
 
     private
 
@@ -102,11 +101,13 @@ module Jazzy
     private_class_method :github_file_prefix
 
     # Latest valid value for SWIFT_VERSION.
-    LATEST_SWIFT_VERSION = '5'
+    LATEST_SWIFT_VERSION = '6'
+    private_constant :LATEST_SWIFT_VERSION
 
     # All valid values for SWIFT_VERSION that are longer
     # than a major version number.  Ordered ascending.
     LONG_SWIFT_VERSIONS = ['4.2'].freeze
+    private_constant :LONG_SWIFT_VERSIONS
 
     # Go from a full Swift version like 4.2.1 to
     # something valid for SWIFT_VERSION.
@@ -139,7 +140,7 @@ module Jazzy
       end
     end
 
-    # rubocop:disable Metrics/MethodLength
+    # rubocop:disable-next Metrics/MethodLength
     def podfile(config)
       swift_version = compiler_swift_version(config.swift_version)
       podspec = @podspec
@@ -172,7 +173,5 @@ module Jazzy
         end
       end
     end
-    # rubocop:enable Metrics/MethodLength
   end
-  # rubocop:enable Metrics/ClassLength
 end

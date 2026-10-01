@@ -12,6 +12,226 @@
 
 * None.
 
+## 0.15.5
+
+##### Breaking
+
+* None.
+
+##### Enhancements
+
+* Generate docs using SwiftPM 6.4  
+  [John Fairhurst](https://github.com/johnfairh)
+
+* Support mustache 1.1.3  
+  [John Fairhurst](https://github.com/johnfairh)
+  [#1435](https://github.com/realm/jazzy/issues/1435)
+
+##### Bug Fixes
+
+* None.
+
+## 0.15.4
+
+##### Breaking
+
+* None.
+
+##### Enhancements
+
+* Allow `custom_categories` to specify a regex for a child.  
+  [Enrico Zannini](https://github.com/Enricoza)
+  [#688](https://github.com/realm/jazzy/issues/688)
+
+* Update Javascript: KaTeX 0.16.25  
+  [John Fairhurst](https://github.com/johnfairh)
+
+##### Bug Fixes
+
+* Don't call extension members that do not need documentation
+  'undocumented'.  
+  [John Fairhurst](https://github.com/johnfairh)
+
+* Work around activesupport vs. concurrent-ruby crash.  
+  [John Fairhurst](https://github.com/johnfairh)
+  [#1414](https://github.com/realm/jazzy/issues/1414)
+
+* Better identify default implementations.  
+  [John Fairhurst](https://github.com/johnfairh)
+  [#1420](https://github.com/realm/jazzy/issues/1420)
+
+* Suppress warning on extensions providing default implementations.  
+  [John Fairhurst](https://github.com/johnfairh)
+  [#1396](https://github.com/realm/jazzy/issues/1396)
+
+## 0.15.3
+
+##### Breaking
+
+* None.
+
+##### Enhancements
+
+* None.
+
+##### Bug Fixes
+
+* Don't crash in SourceKitten when the Swift 6 compiler reports
+  educational notes.  
+  [John Fairhurst](https://github.com/johnfairh)
+  [#1399](https://github.com/realm/jazzy/issues/1399)
+
+## 0.15.2
+
+##### Breaking
+
+* None.
+
+##### Enhancements
+
+* Support Swift 6.0 / Xcode 16.0  
+  [John Fairhurst](https://github.com/johnfairh)
+
+##### Bug Fixes
+
+* None.
+
+## 0.15.1
+
+##### Breaking
+
+* None.
+
+##### Enhancements
+
+* None.
+
+##### Bug Fixes
+
+* Restore compatibility with Ruby 2.6  
+  [John Fairhurst](https://github.com/johnfairh)
+  [#1388](https://github.com/realm/jazzy/issues/1388)
+
+## 0.15.0
+
+##### Breaking
+
+* None.
+
+##### Enhancements
+
+* Update Javascript: typeahead.js 1.3.4, KaTeX 0.16.10  
+  [John Fairhurst](https://github.com/johnfairh)
+
+* Support Swift 5.10 with Swift Package Manager projects.  
+  [John Fairhurst](https://github.com/johnfairh)
+  [#1381](https://github.com/realm/jazzy/issues/1381)
+
+* Support documentation of multiple modules in a single website.  Use
+  `--modules` or the config-file `modules` for more control.  See the
+  README 'Documenting multiple modules' for more details.  
+  [Argjira Mala](https://github.com/argjiramala-tomtom)
+  [Pedro Alcobia](https://github.com/PedroAlcobia-TomTom)
+  [John Fairhurst](https://github.com/johnfairh)
+  [#564](https://github.com/realm/jazzy/issues/564)
+
+* Improve page breadcrumbs to include parent pages and indicate source module
+  of extensions from other modules.  
+  [John Fairhurst](https://github.com/johnfairh)
+
+* Add `--readme-title` and `--docset-title` to set the titles of the readme
+  docs page and the Dash docset independently of the module name.  
+  [John Fairhurst](https://github.com/johnfairh)
+
+* Support Swift 5.9 symbolgraph extension symbols.  
+  [John Fairhurst](https://github.com/johnfairh)
+  [#1368](https://github.com/realm/jazzy/issues/1368)
+
+##### Bug Fixes
+
+* Fix incorrect activesupport usage.  
+  [John Fairhurst](https://github.com/johnfairh)
+
+## 0.14.4
+
+##### Breaking
+
+* None.
+
+##### Enhancements
+
+* Update Javascript: jQuery 3.7.1, KaTeX 0.16.8  
+  [John Fairhurst](https://github.com/johnfairh)
+
+* Support Swift `package` access control level.  
+  [John Fairhurst](https://github.com/johnfairh)
+
+* Initial support for Swift macro declarations.  Requires
+  `--swift-build-tool symbolgraph`.  
+  [John Fairhurst](https://github.com/johnfairh)
+
+* Support Swift `@_documentation(visibility:)` attribute.  Requires
+  `--swift-build-tool spm|xcodebuild`.  
+  [John Fairhurst](https://github.com/johnfairh)
+
+##### Bug Fixes
+
+* Issue a warning instead of crashing on declarations without names.  
+  [#1325](https://github.com/realm/jazzy/issues/1325)
+  [John Fairhurst](https://github.com/johnfairh)
+
+* Fix extension ordering in symbolgraph mode.  
+  [John Fairhurst](https://github.com/johnfairh)
+
+* Fix symbolgraph mode crash involving tuple generic constraints.  
+  [John Fairhurst](https://github.com/johnfairh)
+
+## 0.14.3
+
+##### Breaking
+
+* None.
+
+##### Enhancements
+
+* Support Swift 5.7 and Xcode 14.  
+  [John Fairhurst](https://github.com/johnfairh)
+
+* Update Javascript: jQuery 3.6.1, KaTeX 0.13.5  
+  [John Fairhurst](https://github.com/johnfairh)
+
+##### Bug Fixes
+
+* None.
+
+## 0.14.2
+
+##### Breaking
+
+* When building with Swift 5.6 and not passing `—-module` to Jazzy, declarations
+  may not be correctly identified as undocumented and docs may include unwanted
+  extensions.  Pass `—-module MyModuleName` to fix this.  
+  [John Fairhurst](https://github.com/johnfairh)
+
+##### Enhancements
+
+* Support using pre-generated symbolgraph files in Swift symbolgraph mode.  
+  [Nathan Wong](https://github.com/esteluk)
+
+* Issue a warning on some combinations of Objective-C flags.  
+  [John Fairhurst](https://github.com/johnfairh)
+  [#900](https://github.com/realm/jazzy/issues/900)
+
+* Support Swift 5.6.  The bundled `sourcekitten` is a universal binary.  
+  [John Fairhurst](https://github.com/johnfairh)
+
+##### Bug Fixes
+
+* In Swift symbolgraph mode, stop including extensions to types that are beneath
+  the minimum ACL.  
+  [John Fairhurst](https://github.com/johnfairh)
+  [#1291](https://github.com/realm/jazzy/issues/1291)
+
 ## 0.14.1
 
 ##### Breaking

@@ -67,32 +67,32 @@ module Jazzy
 
     # Build documentation from the given options
     # @param [Config] options
-    # @return [SourceModule] the documented source module
     def self.build(options)
-      if options.sourcekitten_sourcefile_configured
-        stdout = "[#{options.sourcekitten_sourcefile.map(&:read).join(',')}]"
-      elsif options.podspec_configured
-        pod_documenter = PodspecDocumenter.new(options.podspec)
-        stdout = pod_documenter.sourcekitten_output(options)
-      elsif options.swift_build_tool == :symbolgraph
-        stdout = SymbolGraph.build(options)
-      else
-        stdout = Dir.chdir(options.source_directory) do
-          arguments = SourceKitten.arguments_from_options(options)
-          SourceKitten.run_sourcekitten(arguments)
+      module_jsons = options.module_configs.map do |module_config|
+        if module_config.podspec_configured
+          # Config#validate guarantees not multi-module here
+          pod_documenter = PodspecDocumenter.new(options.podspec)
+          pod_documenter.sourcekitten_output(options)
+        elsif !module_config.sourcekitten_sourcefile.empty?
+          "[#{module_config.sourcekitten_sourcefile.map(&:read).join(',')}]"
+        elsif module_config.swift_build_tool == :symbolgraph
+          SymbolGraph.build(module_config)
+        else
+          Dir.chdir(module_config.source_directory) do
+            arguments = SourceKitten.arguments_from_options(module_config)
+            SourceKitten.run_sourcekitten(arguments)
+          end
         end
       end
 
-      build_docs_for_sourcekitten_output(stdout, options)
+      build_docs_for_sourcekitten_output(module_jsons, options)
     end
 
     # Build & write HTML docs to disk from structured docs array
     # @param [String] output_dir Root directory to write docs
-    # @param [Array] docs Array of structured docs
-    # @param [Config] options Build options
-    # @param [Array] doc_structure @see #doc_structure_for_docs
-    def self.build_docs(output_dir, docs, source_module)
-      each_doc(output_dir, docs) do |doc, path|
+    # @param [SourceModule] source_module All info to generate docs
+    def self.build_docs(output_dir, source_module)
+      each_doc(output_dir, source_module.docs) do |doc, path|
         prepare_output_dir(path.parent, false)
         depth = path.relative_path_from(output_dir).each_filename.count - 1
         path_to_root = '../' * depth
@@ -124,10 +124,13 @@ module Jazzy
 
       docs << SourceDocument.make_index(options.readme_path)
 
-      source_module = SourceModule.new(options, docs, structure, coverage)
-
       output_dir = options.output
-      build_docs(output_dir, source_module.docs, source_module)
+
+      docset_builder = DocsetBuilder.new(output_dir)
+
+      source_module = SourceModule.new(docs, structure, coverage, docset_builder)
+
+      build_docs(output_dir, source_module)
 
       unless options.disable_search
         warn 'building search index'
@@ -137,7 +140,7 @@ module Jazzy
       copy_extensions(source_module, output_dir)
       copy_theme_assets(output_dir)
 
-      DocsetBuilder.new(output_dir, source_module).build!
+      docset_builder.build!(source_module.all_declarations)
 
       generate_badge(source_module.doc_coverage, options)
 
@@ -148,14 +151,12 @@ module Jazzy
     end
 
     # Build docs given sourcekitten output
-    # @param [String] sourcekitten_output Output of sourcekitten command
+    # @param [Array<String>] sourcekitten_output Output of sourcekitten command for each module
     # @param [Config] options Build options
-    # @return [SourceModule] the documented source module
     def self.build_docs_for_sourcekitten_output(sourcekitten_output, options)
       (docs, stats) = SourceKitten.parse(
         sourcekitten_output,
-        options.min_acl,
-        options.skip_undocumented,
+        options,
         DocumentationGenerator.source_docs,
       )
 
@@ -249,7 +250,8 @@ module Jazzy
         doc[:doc_coverage] = source_module.doc_coverage unless
           Config.instance.hide_documentation_coverage
         doc[:structure] = source_module.doc_structure
-        doc[:module_name] = source_module.name
+        doc[:readme_title] = source_module.readme_title
+        doc[:module_name] = doc[:readme_title]
         doc[:author_name] = source_module.author_name
         if source_host = source_module.host
           doc[:source_host_name] = source_host.name
@@ -259,7 +261,8 @@ module Jazzy
           doc[:github_url] = doc[:source_host_url]
           doc[:github_token_url] = doc[:source_host_item_url]
         end
-        doc[:dash_url] = source_module.dash_url
+        doc[:dash_url] = source_module.dash_feed_url
+        doc[:breadcrumbs] = make_breadcrumbs(doc_model)
       end
     end
 
@@ -269,7 +272,7 @@ module Jazzy
     # @param [String] path_to_root
     def self.document_markdown(source_module, doc_model, path_to_root)
       doc = new_document(source_module, doc_model)
-      name = doc_model.name == 'index' ? source_module.name : doc_model.name
+      name = doc_model.readme? ? source_module.readme_title : doc_model.name
       doc[:name] = name
       doc[:overview] = render(doc_model, doc_model.content(source_module))
       doc[:path_to_root] = path_to_root
@@ -296,8 +299,8 @@ module Jazzy
       end
     end
 
-    # rubocop:disable Metrics/MethodLength
-
+    # rubocop:disable-next Metrics/MethodLength
+    #
     # Generates an SVG similar to those from shields.io displaying the
     # documentation percentage
     # @param [Number] coverage The documentation coverage percentage
@@ -343,12 +346,11 @@ module Jazzy
       badge_output = options.output + 'badge.svg'
       File.open(badge_output, 'w') { |f| f << svg }
     end
-    # rubocop:enable Metrics/MethodLength
 
     # Build mustache item for a top-level doc
     # @param [Hash] item Parsed doc child item
     # @param [Config] options Build options
-    # rubocop:disable Metrics/MethodLength
+    # rubocop:disable-next Metrics/MethodLength
     def self.render_item(item, source_module)
       # Combine abstract and discussion into abstract
       abstract = (item.abstract || '') + (item.discussion || '')
@@ -379,7 +381,6 @@ module Jazzy
         declaration_note: item.declaration_note,
       }
     end
-    # rubocop:enable Metrics/MethodLength
 
     def self.make_task(mark, uid, items, doc_model)
       {
@@ -404,7 +405,7 @@ module Jazzy
         uid = (mark.name || 'Unnamed').to_s
         if mark_names_counts.key?(uid)
           mark_names_counts[uid] += 1
-          uid += (mark_names_counts[uid]).to_s
+          uid += mark_names_counts[uid].to_s
         else
           mark_names_counts[uid] = 1
         end
@@ -412,7 +413,7 @@ module Jazzy
       end
     end
 
-    # rubocop:disable Metrics/MethodLength
+    # rubocop:disable-next Metrics/MethodLength
     # Build Mustache document from single parsed decl
     # @param [SourceModule] module-wide settings
     # @param [Hash] doc_model Parsed doc. @see SourceKitten.parse
@@ -446,6 +447,28 @@ module Jazzy
       doc[:usage_discouraged] = doc_model.usage_discouraged?
       doc.render.gsub(ELIDED_AUTOLINK_TOKEN, path_to_root)
     end
-    # rubocop:enable Metrics/MethodLength
+
+    # Breadcrumbs for a page - doesn't include the top 'readme' crumb
+    def self.make_breadcrumbs(doc_model)
+      return [] if doc_model.readme?
+
+      docs_path = doc_model.docs_path
+      breadcrumbs = docs_path.map do |doc|
+        {
+          name: doc.name,
+          url: doc.url,
+          last: doc == doc_model,
+        }
+      end
+
+      return breadcrumbs if breadcrumbs.one?
+
+      # Add the module name to the outer type if not clear from context
+      if docs_path[1].ambiguous_module_name?(docs_path[0].name)
+        breadcrumbs[1][:name] = docs_path[1].fully_qualified_module_name
+      end
+
+      breadcrumbs
+    end
   end
 end

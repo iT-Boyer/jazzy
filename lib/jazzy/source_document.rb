@@ -27,6 +27,10 @@ module Jazzy
       end
     end
 
+    def readme?
+      url == 'index.html'
+    end
+
     def render_as_page?
       true
     end
@@ -89,7 +93,7 @@ pod '#{podspec.name}'
         README
       else
         <<-README
-# #{source_module.name}
+# #{source_module.readme_title}
 
 ### Authors
 

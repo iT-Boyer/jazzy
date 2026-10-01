@@ -48,9 +48,9 @@ module Jazzy
       elsif config.version_configured
         # Fake version for integration tests
         version = ENV['JAZZY_FAKE_MODULE_VERSION'] || config.version
-        "#{config.module_name} #{version} Docs"
+        "#{config.module_configs.first.module_name} #{version} Docs"
       else
-        "#{config.module_name} Docs"
+        "#{config.module_configs.first.module_name} Docs"
       end
     end
 

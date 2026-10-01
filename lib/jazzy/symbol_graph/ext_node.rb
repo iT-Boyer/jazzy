@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'set'
+
 module Jazzy
   module SymbolGraph
     # For extensions we need to track constraints of the extended type
@@ -23,9 +25,10 @@ module Jazzy
     # an extension that we fabricate to resolve certain relationships.
     class ExtNode < BaseNode
       attr_accessor :usr
+      attr_accessor :real_usr
       attr_accessor :name
       attr_accessor :all_constraints # ExtConstraints
-      attr_accessor :conformances # array, can be empty
+      attr_accessor :conformances # set, can be empty
 
       # Deduce an extension from a member of an unknown type or
       # of known type with additional constraints
@@ -53,7 +56,7 @@ module Jazzy
         self.usr = usr
         self.name = name
         self.all_constraints = constraints
-        self.conformances = []
+        self.conformances = Set.new
         super()
       end
 
@@ -64,52 +67,70 @@ module Jazzy
       end
 
       def add_conformance(protocol)
-        conformances.append(protocol).sort!
+        conformances.add(protocol)
       end
 
       def full_declaration
         decl = "extension #{name}"
         unless conformances.empty?
-          decl += " : #{conformances.join(', ')}"
+          decl += " : #{conformances.sort.join(', ')}"
         end
         decl + all_constraints.ext.to_where_clause
       end
 
-      def to_sourcekit(module_name)
+      def to_sourcekit(module_name, ext_module_name)
         declaration = full_declaration
         xml_declaration = "<swift>#{CGI.escapeHTML(declaration)}</swift>"
 
         hash = {
           'key.kind' => 'source.lang.swift.decl.extension',
-          'key.usr' => usr,
+          'key.usr' => real_usr || usr,
           'key.name' => name,
-          'key.modulename' => module_name,
+          'key.modulename' => ext_module_name,
           'key.parsed_declaration' => declaration,
           'key.annotated_decl' => xml_declaration,
         }
 
         unless conformances.empty?
-          hash['key.inheritedtypes'] = conformances.map do |conformance|
+          hash['key.inheritedtypes'] = conformances.sort.map do |conformance|
             { 'key.name' => conformance }
           end
         end
 
-        unless children.empty?
-          hash['key.substructure'] = children_to_sourcekit
-        end
+        add_children_to_sourcekit(hash, module_name)
 
         hash
       end
 
-      # Sort order - by type name then constraint
+      # Sort order - by type name then constraint then conformances
+      # Conformance check needed for stable order with Swift 5.9
+      # extension symbols that can't merge as well as previously.
       include Comparable
 
       def sort_key
-        name + constraints.map(&:to_swift).join
+        name + constraints.map(&:to_swift).join + conformances.sort.join
       end
 
       def <=>(other)
         sort_key <=> other.sort_key
+      end
+    end
+
+    # An ExtSymNode is an extension generated from a Swift 5.9 extension
+    # symbol, for extensions of types from other modules only.
+    class ExtSymNode < ExtNode
+      attr_accessor :symbol
+
+      def initialize(symbol)
+        self.symbol = symbol
+        super(symbol.usr, symbol.full_name,
+              # sadly can't tell what constraints are inherited vs added
+              ExtConstraints.new([], symbol.constraints))
+      end
+
+      def to_sourcekit(module_name, ext_module_name)
+        hash = super
+        symbol.add_to_sourcekit(hash)
       end
     end
   end

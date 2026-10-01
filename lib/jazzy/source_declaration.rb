@@ -4,7 +4,7 @@ require 'jazzy/source_declaration/access_control_level'
 require 'jazzy/source_declaration/type'
 
 module Jazzy
-  # rubocop:disable Metrics/ClassLength
+  # rubocop:disable-next Metrics/ClassLength
   class SourceDeclaration
     # kind of declaration (e.g. class, variable, function)
     attr_accessor :type
@@ -62,6 +62,7 @@ module Jazzy
       end
     end
 
+    # 'OuterType.NestedType.method(arg:)'
     def fully_qualified_name
       namespace_path.map(&:name).join('.')
     end
@@ -74,6 +75,21 @@ module Jazzy
                                .join('(?:<.*?>)?\.'))
     end
 
+    def fully_qualified_module_name_parts
+      path = namespace_path
+      path.map(&:name).prepend(path.first.module_name).compact
+    end
+
+    # 'MyModule.OuterType.NestedType.method(arg:)'
+    def fully_qualified_module_name
+      fully_qualified_module_name_parts.join('.')
+    end
+
+    # List of doc_parent decls, .last is self
+    def docs_path
+      (parent_in_docs&.docs_path || []) + [self]
+    end
+
     # If this declaration is an objc category, returns an array with the name
     # of the extended objc class and the category name itself, i.e.
     # ["NSString", "MyMethods"], nil otherwise.
@@ -82,7 +98,7 @@ module Jazzy
     end
 
     def swift_objc_extension?
-      type.swift_extension? && usr && usr.start_with?('c:objc')
+      type.swift_extension? && usr&.start_with?('c:objc')
     end
 
     def swift_extension_objc_name
@@ -114,7 +130,7 @@ module Jazzy
     attr_accessor :column
     attr_accessor :usr
     attr_accessor :type_usr
-    attr_accessor :modulename
+    attr_accessor :module_name
     attr_accessor :name
     attr_accessor :objc_name
     attr_accessor :declaration
@@ -139,6 +155,11 @@ module Jazzy
     attr_accessor :generic_requirements
     attr_accessor :inherited_types
     attr_accessor :async
+
+    # The name of the module being documented that contains this
+    # declaration.  Only different from module_name when this is
+    # an extension of a type from another module.  Nil for guides.
+    attr_accessor :doc_module_name
 
     def usage_discouraged?
       unavailable || deprecated
@@ -183,18 +204,75 @@ module Jazzy
       inherited_types.any? { |t| !unwanted.include?(t) }
     end
 
-    # SourceKit only sets modulename for imported modules
+    # Pre-Swift 5.6: SourceKit only sets module_name for imported modules
+    # Swift 5.6+: module_name is always set
     def type_from_doc_module?
       !type.extension? ||
-        (swift? && usr && modulename.nil?)
+        (swift? && usr &&
+          (module_name.nil? || module_name == doc_module_name))
+    end
+
+    # Don't ask the user to write documentation for types being extended
+    # from other modules.  Compile errors leave no docs and a `nil` USR.
+    def mark_undocumented?
+      !swift? || (usr && !extension_of_external_type?)
+    end
+
+    def extension_of_external_type?
+      !module_name.nil? &&
+        !Config.instance.module_name?(module_name)
+    end
+
+    # Is it unclear from context what module the (top-level) decl is from?
+    def ambiguous_module_name?(group_name)
+      extension_of_external_type? ||
+        (Config.instance.multiple_modules? &&
+          !module_name.nil? &&
+          group_name != module_name)
+    end
+
+    # Does the user need help understanding how to get this declaration?
+    def need_doc_module_note?
+      return false unless Config.instance.multiple_modules?
+      return false if docs_path.first.name == doc_module_name
+
+      if parent_in_code.nil?
+        # Top-level decls with no page of their own
+        !render_as_page?
+      else
+        # Members added by extension
+        parent_in_code.module_name != doc_module_name
+      end
     end
 
     # Info text for contents page by collapsed item name
     def declaration_note
-      notes = [default_impl_abstract ? 'default implementation' : nil,
-               from_protocol_extension ? 'extension method' : nil,
-               async ? 'asynchronous' : nil].compact
-      notes.join(', ').humanize unless notes.empty?
+      notes = [
+        default_impl_abstract ? 'default implementation' : nil,
+        from_protocol_extension ? 'extension method' : nil,
+        async ? 'asynchronous' : nil,
+        need_doc_module_note? ? "from #{doc_module_name}" : nil,
+      ].compact
+      notes.join(', ').upcase_first unless notes.empty?
+    end
+
+    # For matching where `Self` is equivalent without considering
+    # constraints
+    def simplified_typename
+      typename&.gsub(/<Self .*?>/, '<Self>')
+    end
+
+    # Is the candidate `SourceDeclaration` probably a default
+    # implementation of this declaration?
+    def default_implementation?(candidate)
+      name == candidate.name &&
+        type == candidate.type &&
+        simplified_typename == candidate.simplified_typename &&
+        async == candidate.async
+    end
+
+    def readme?
+      false
     end
 
     def alternative_abstract
@@ -218,5 +296,4 @@ module Jazzy
       Config.instance.abstract_glob.select { |e| File.file? e }
     end
   end
-  # rubocop:enable Metrics/ClassLength
 end
